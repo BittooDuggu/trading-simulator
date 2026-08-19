@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Custom Trading Simulator</title>
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; background: #131722; color: #d1d4dc; }
+    .header { padding: 12px 20px; background: #1e222d; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #2a2e39; flex-wrap: wrap; }
+    input, select, button { background: #2a2e39; color: #fff; border: 1px solid #434651; padding: 6px 12px; border-radius: 4px; }
+    button { background: #2962ff; cursor: pointer; border: none; font-weight: bold; }
+    button:hover { background: #1e53e5; }
+    .container { display: flex; height: calc(100vh - 60px); }
+    #chart { flex: 1; height: 100%; }
+    .sidebar { width: 320px; background: #1e222d; border-left: 1px solid #2a2e39; padding: 15px; box-sizing: border-box; overflow-y: auto; }
+    .metric { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #2a2e39; padding-bottom: 5px; }
+    .metric-value { font-weight: bold; }
+    .green { color: #089981; } .red { color: #f23645; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <label>Asset: 
+      <select id="assetSelect">
+        <option value="BTCUSD">Crypto: BTC/USD</option>
+        <option value="EURUSD=X">Forex: EUR/USD</option>
+        <option value="^NSEBANK">Indian Index: Bank Nifty</option>
+        <option value="AAPL">US Stock: Apple (AAPL)</option>
+      </select>
+    </label>
+    <label>Capital ($/₹): <input type="number" id="capital" value="100000"></label>
+    <button id="runBtn">Run Strategy Engine</button>
+    <button id="stepBtn">Forward 1 Bar (Future Test)</button>
+  </div>
+  <div class="container">
+    <div id="chart"></div>
+    <div class="sidebar">
+      <h3>Simulation Results</h3>
+      <div class="metric"><span>Initial Capital:</span> <span id="resInitial" class="metric-value">-</span></div>
+      <div class="metric"><span>Final Equity:</span> <span id="resEquity" class="metric-value">-</span></div>
+      <div class="metric"><span>Total Return:</span> <span id="resReturn" class="metric-value">-</span></div>
+      <div class="metric"><span>Total Trades:</span> <span id="resTrades" class="metric-value">-</span></div>
+      <div class="metric"><span>Win Rate:</span> <span id="resWinRate" class="metric-value">-</span></div>
+      <h4>Trade Log</h4>
+      <div id="tradeLog" style="font-size: 12px; font-family: monospace;"></div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
