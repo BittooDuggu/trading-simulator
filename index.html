@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Strategy Simulator - Real Data</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; background: #131722; color: #d1d4dc; }
+    .header { padding: 10px 20px; background: #1e222d; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #2a2e39; flex-wrap: wrap; font-size: 12px; }
+    .header label { display: flex; flex-direction: column; gap: 3px; font-weight: bold; color: #848e9c; }
+    input, select { background: #2a2e39; color: #fff; border: 1px solid #434651; padding: 6px; border-radius: 4px; width: 110px; }
+    button { background: #2962ff; color: #fff; cursor: pointer; border: none; font-weight: bold; padding: 8px 14px; border-radius: 4px; height: 32px; align-self: flex-end; }
+    button:hover { background: #1e53e5; }
+    .container { display: flex; height: calc(100vh - 65px); }
+    #chart { flex: 1; height: 100%; }
+    .sidebar { width: 420px; background: #1e222d; border-left: 1px solid #2a2e39; padding: 15px; box-sizing: border-box; overflow-y: auto; }
+    .metric { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #2a2e39; padding-bottom: 5px; }
+    .metric-value { font-weight: bold; }
+    .green { color: #089981; } .red { color: #f23645; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <label>Symbol 
+      <select id="symbolSelect">
+        <option value="BTCUSDT">BTCUSDT</option>
+        <option value="ETHUSDT">ETHUSDT</option>
+        <option value="SOLUSDT">SOLUSDT</option>
+      </select>
+    </label>
+    <label>Capital <input type="number" id="capital" value="5000"></label>
+    <label>Default Lots <input type="number" id="defaultLots" value="0.01" step="0.01"></label>
+    <label>Target (Pts) <input type="number" id="targetPts" value="500"></label>
+    <label>SL (Pts) <input type="number" id="slPts" value="250"></label>
+    <label>Recovery (Pts) <input type="number" id="recPts" value="400"></label>
+    <button id="runBtn">Run Strategy</button>
+  </div>
+
+  <div class="container">
+    <div id="chart"></div>
+    <div class="sidebar">
+      <h3>Simulation Results</h3>
+      <div class="metric"><span>Initial Capital:</span> <span id="resInitial" class="metric-value">-</span></div>
+      <div class="metric"><span>Final Equity:</span> <span id="resEquity" class="metric-value">-</span></div>
+      <div class="metric"><span>Total Return:</span> <span id="resReturn" class="metric-value">-</span></div>
+      <div class="metric"><span>Total Trades:</span> <span id="resTrades" class="metric-value">-</span></div>
+      <div class="metric"><span>Win Rate:</span> <span id="resWinRate" class="metric-value">-</span></div>
+      <h4>Trade Log</h4>
+      <div id="tradeLog" style="font-size: 10px; font-family: monospace; max-height: 350px; overflow-y: auto;"></div>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const chartContainer = document.getElementById('chart');
+      const chart = LightweightCharts.createChart(chartContainer, {
+        layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
+        grid: { vertLines: { color: '#2b2f3a' }, horzLines: { color: '#2b2f3a' } },
+        timeScale: { timeVisible: true, secondsVisible: false }
+      });
+
+      const candleSeries = chart.addCandlestickSeries({
+        upColor: '#089981', downColor: '#f23645', borderVisible: false, wickUpColor: '#089981', wickDownColor: '#f23645'
+      });
+
+      async function fetchRealData(symbol) {
+        try {
+          const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=500`);
+          const rawData = await response.json();
+          
+          return rawData.map(item => {
+            let timeSec = Math.floor(item[0] / 1000);
+            let dateObj = new Date(item[0]);
+            let dateString = dateObj.toISOString().replace('T', ' ').substring(0, 16);
+            return {
+              time: timeSec,
+              dateString: dateString,
+              open: parseFloat(item[1]),
+              high: parseFloat(item[2]),
+              low: parseFloat(item[3]),
+              close: parseFloat(item[4])
+            };
+          });
+        } catch (error) {
+          console.error("Error fetching data from Binance:", error);
+          alert("Failed to fetch live data. Check your internet connection.");
+          return [];
+        }
+      }
+
+      function runStrategy(data, initialCapital, config) {
+        let capital = initialCapital;
+        let trades = [];
+        let currentLots = config.defaultLots;
+        let direction = 'BUY';
+
+        for (let i = 1; i < data.length; i++) {
+          let startBar = data[i];
+          let entryPrice = startBar.open;
+          let startTimeStr = startBar.dateString;
+          
+          let targetPrice = direction === 'BUY' ? entryPrice + config.targetPts : entryPrice - config.targetPts;
+          let stopLossPrice = direction === 'BUY' ? entryPrice - config.slPts : entryPrice + config.slPts;
+
+          let tradeOutcome = 'PENDING';
+          let exitPrice = entryPrice;
+          let endTimeStr = startTimeStr;
+
+          for (let j = i; j < Math.min(i + 24, data.length); j++) {
+            let b = data[j];
+            if (direction === 'BUY') {
+              if (b.low <= stopLossPrice) { 
+                tradeOutcome = 'LOSS'; 
+                exitPrice = stopLossPrice; 
+                endTimeStr = b.dateString;
+                break; 
+              }
+              if (b.high >= targetPrice) { 
+                tradeOutcome = 'WIN'; 
+                exitPrice = targetPrice; 
+                endTimeStr = b.dateString;
+                break; 
+              }
+            } else {
+              if (b.high >= stopLossPrice) { 
+                tradeOutcome = 'LOSS'; 
+                exitPrice = stopLossPrice; 
+                endTimeStr = b.dateString;
+                break; 
+              }
+              if (b.low <= targetPrice) { 
+                tradeOutcome = 'WIN'; 
+                exitPrice = targetPrice; 
+                endTimeStr = b.dateString;
+                break; 
+              }
+            }
+          }
+
+          let startBalance = capital;
+          let pnl = direction === 'BUY' ? (exitPrice - entryPrice) * currentLots : (entryPrice - exitPrice) * currentLots;
+          capital += pnl;
+          let endBalance = capital;
+
+          trades.push({
+            id: trades.length + 1,
+            direction,
+            lots: currentLots,
+            startTime: startTimeStr,
+            startPrice: entryPrice,
+            endTime: endTimeStr,
+            endPrice: exitPrice,
+            startBalance,
+            endBalance,
+            outcome: tradeOutcome,
+            pnl
+          });
+
+          if (tradeOutcome === 'LOSS') {
+            let lossAmount = Math.abs(pnl);
+            let exactIncrement = lossAmount / config.recPts;
+            let roundedIncrement = Math.ceil(exactIncrement * 100) / 100;
+            
+            let nextLots = currentLots + roundedIncrement;
+            currentLots = Math.round(nextLots * 100) / 100;
+            
+            direction = direction === 'BUY' ? 'SELL' : 'BUY';
+          } else {
+            currentLots = config.defaultLots;
+            direction = direction === 'BUY' ? 'SELL' : 'BUY';
+          }
+          i += 3;
+        }
+        return { finalCapital: capital, trades };
+      }
+
+      async function updateUI() {
+        let symbol = document.getElementById('symbolSelect').value;
+        let marketData = await fetchRealData(symbol);
+        if (marketData.length === 0) return;
+
+        candleSeries.setData(marketData);
+
+        let capital = parseFloat(document.getElementById('capital').value) || 5000;
+        let config = {
+          defaultLots: parseFloat(document.getElementById('defaultLots').value) || 0.01,
+          targetPts: parseFloat(document.getElementById('targetPts').value) || 500,
+          slPts: parseFloat(document.getElementById('slPts').value) || 250,
+          recPts: parseFloat(document.getElementById('recPts').value) || 400
+        };
+
+        let results = runStrategy(marketData, capital, config);
+
+        document.getElementById('resInitial').innerText = `$${capital.toLocaleString()}`;
+        document.getElementById('resEquity').innerText = `$${results.finalCapital.toFixed(2)}`;
+        
+        let ret = ((results.finalCapital - capital) / capital) * 100;
+        let retElement = document.getElementById('resReturn');
+        retElement.innerText = `${ret.toFixed(2)}%`;
+        retElement.className = ret >= 0 ? 'metric-value green' : 'metric-value red';
+
+        document.getElementById('resTrades').innerText = results.trades.length;
+        
+        let wins = results.trades.filter(t => t.outcome === 'WIN').length;
+        let winRate = results.trades.length > 0 ? (wins / results.trades.length) * 100 : 0;
+        document.getElementById('resWinRate').innerText = `${winRate.toFixed(1)}%`;
+
+        let logHtml = '';
+        results.trades.forEach(t => {
+          let color = t.outcome === 'WIN' ? '#089981' : '#f23645';
+          logHtml += `<div style="border-bottom:1px solid #2a2e39; padding:5px 0; color:${color}">
+            <b>[#${t.id}] ${t.direction}</b> | Lots: ${t.lots} | PnL: $${t.pnl.toFixed(2)} (${t.outcome})<br>
+            <b>Start:</b> ${t.startTime} @ $${t.startPrice.toFixed(2)}<br>
+            <b>End:</b> ${t.endTime} @ $${t.endPrice.toFixed(2)}<br>
+            <b>Balance:</b> $${t.startBalance.toFixed(2)} ➔ $${t.endBalance.toFixed(2)}
+          </div>`;
+        });
+        document.getElementById('tradeLog').innerHTML = logHtml;
+      }
+
+      document.getElementById('runBtn').addEventListener('click', updateUI);
+      updateUI();
+    });
+  </script>
+</body>
+</html>
