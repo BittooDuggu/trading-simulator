@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strategies Performance Dashboard</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; background: #131722; color: #d1d4dc; padding: 20px; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2e39; padding-bottom: 15px; margin-bottom: 20px; }
+    .home-link { background: #2a2e39; color: #fff; text-decoration: none; padding: 8px 14px; border-radius: 4px; font-weight: bold; border: 1px solid #434651; }
+    .home-link:hover { background: #434651; }
+    .container { display: flex; gap: 20px; }
+    .sidebar { width: 300px; background: #1e222d; border: 1px solid #2a2e39; border-radius: 6px; padding: 15px; height: calc(100vh - 120px); overflow-y: auto; }
+    .main-content { flex: 1; background: #1e222d; border: 1px solid #2a2e39; border-radius: 6px; padding: 20px; height: calc(100vh - 120px); overflow-y: auto; }
+    .strategy-item { padding: 10px; background: #2a2e39; margin-bottom: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+    .strategy-item:hover { background: #363c4e; }
+    .strategy-item.active { background: #2962ff; color: #fff; }
+    .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+    .metric-card { background: #2a2e39; padding: 15px; border-radius: 6px; }
+    .metric-title { font-size: 12px; color: #848e9c; margin-bottom: 5px; }
+    .metric-val { font-size: 18px; font-weight: bold; }
+    .green { color: #089981; } .red { color: #f23645; }
+    .trade-row { border-bottom: 1px solid #2a2e39; padding: 8px 0; font-size: 12px; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>Saved Strategies Performance Dashboard</h2>
+    <a href="index.html" class="home-link">🏠 Back to Hub</a>
+  </div>
+
+  <div class="container">
+    <div class="sidebar" id="strategyList">
+      <h3>Active Strategies</h3>
+      <!-- Dynamic list will load here -->
+    </div>
+
+    <div class="main-content" id="strategyDetails">
+      <p style="color: #848e9c;">Select a strategy from the left sidebar to view its detailed logs and performance.</p>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const listContainer = document.getElementById('strategyList');
+      const detailsContainer = document.getElementById('strategyDetails');
+
+      function loadStrategiesList() {
+        let keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          let key = localStorage.key(i);
+          if (key && key.startsWith('paper_trading_state_')) {
+            keys.push(key);
+          }
+        }
+
+        if (keys.length === 0) {
+          listContainer.innerHTML += '<p style="font-size:12px; color:#848e9c;">No saved strategies found yet. Run paper trading first.</p>';
+          return;
+        }
+
+        keys.forEach(key => {
+          let strategyName = key.replace('paper_trading_state_', '');
+          let div = document.createElement('div');
+          div.className = 'strategy-item';
+          div.innerText = strategyName;
+          div.addEventListener('click', () => {
+            document.querySelectorAll('.strategy-item').forEach(el => el.classList.remove('active'));
+            div.classList.add('active');
+            displayStrategyData(key, strategyName);
+          });
+          listContainer.appendChild(div);
+        });
+
+        // Auto-select first if available
+        if (keys.length > 0) {
+          listContainer.children[1]?.click();
+        }
+      }
+
+      function displayStrategyData(storageKey, name) {
+        let rawData = localStorage.getItem(storageKey);
+        if (!rawData) return;
+        let data = JSON.parse(rawData);
+
+        let initialCap = 5000; // default baseline or get from data if stored
+        let currentEq = data.capital || initialCap;
+        let totalTrades = data.trades ? data.trades.length : 0;
+        let wins = data.trades ? data.trades.filter(t => t.outcome === 'WIN').length : 0;
+        let winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : 0;
+        let netProfit = currentEq - initialCap;
+
+        let html = `
+          <h3>Strategy: <span style="color:#2962ff">${name}</span></h3>
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="metric-title">Current Equity</div>
+              <div class="metric-val">$${currentEq.toFixed(2)}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">Net Profit / Loss</div>
+              <div class="metric-val ${netProfit >= 0 ? 'green' : 'red'}">$${netProfit.toFixed(2)}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-title">Win Rate (${wins}/${totalTrades})</div>
+              <div class="metric-val">${winRate}%</div>
+            </div>
+          </div>
+
+          <h4>Active Trade Status</h4>
+          <div style="background:#2a2e39; padding:10px; border-radius:4px; margin-bottom:20px; font-size:13px;">
+            ${data.activeTrade ? `<b class="green">RUNNING:</b> ${data.activeTrade.direction} @ $${data.activeTrade.entryPrice} (Lots: ${data.activeTrade.lots})` : '<span style="color:#848e9c">No active trade right now (Scanning background SLs...)</span>'}
+            <br><small>Current Cumulative SL Count: <b>${data.cumulativeSLCount}</b></small>
+          </div>
+
+          <h4>Trade Logs History</h4>
+          <div style="max-height: 250px; overflow-y: auto; background:#131722; padding:10px; border-radius:4px;">
+        `;
+
+        if (!data.trades || data.trades.length === 0) {
+          html += `<div style="color:#848e9c; font-size:12px;">No completed trades recorded yet for this strategy.</div>`;
+        } else {
+          data.trades.slice().reverse().forEach(t => {
+            let color = t.outcome === 'WIN' ? '#089981' : '#f23645';
+            html += `
+              <div class="trade-row" style="color:${color}">
+                <b>[#${t.id}] ${t.direction}</b> | Lots: ${t.lots} | PnL: $${t.pnl.toFixed(2)} (${t.outcome})<br>
+                Start: ${t.startTime} (@$${t.startPrice}) ➔ End: ${t.endTime} (@$${t.endPrice})<br>
+                Balance: $${t.startBalance.toFixed(2)} ➔ $${t.endBalance.toFixed(2)}
+              </div>
+            `;
+          });
+        }
+
+        html += `</div>`;
+        detailsContainer.innerHTML = html;
+      }
+
+      loadStrategiesList();
+    });
+  </script>
+</body>
+</html>
