@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Strategy Hub</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; background: #131722; color: #d1d4dc; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .hub-container { width: 700px; padding: 20px; }
+    h2 { text-align: center; color: #fff; margin-bottom: 5px; }
+    .subtitle { text-align: center; color: #848e9c; font-size: 13px; margin-bottom: 25px; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .tile { background: #1e222d; border: 1px solid #2a2e39; border-radius: 8px; padding: 20px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; transition: 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .tile:hover { border-color: #2962ff; transform: translateY(-2px); background: #222634; }
+    .tile-title { font-weight: bold; font-size: 15px; color: #fff; }
+    .tile-desc { font-size: 12px; color: #848e9c; }
+  </style>
+</head>
+<body>
+  <div class="hub-container">
+    <h2>Strategy Simulator Hub</h2>
+    <div class="subtitle">Select a strategy tile to launch its backtest engine</div>
+    
+    <div class="grid">
+      <a class="tile" href="strategy_500_400_250.html">
+        <span class="tile-title">Strategy 500 / 400 / 250</span>
+        <span class="tile-desc">Standard continuous sequential execution layout.</span>
+      </a>
+      
+      <a class="tile" href="strategy_500_400_250_x.html">
+        <span class="tile-title">Strategy 500 / 400 / 250 / X</span>
+        <span class="tile-desc">Executes trades only after X consecutive losses occur in the market.</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
